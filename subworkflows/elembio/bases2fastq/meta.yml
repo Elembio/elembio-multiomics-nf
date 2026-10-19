@@ -1,0 +1,60 @@
+name: bases2fastq
+description: Run bases2fastq demultiplexing on AVITI sequencing data
+keywords:
+  - demultiplexing
+  - fastq
+  - aviti
+  - element biosciences
+components:
+  - bases2fastq
+input:
+  - ch_run_dir:
+      type: channel
+      description: "Channel of tuples: [ [meta], run_dir ]"
+  - run_manifest_csv:
+      type: file
+      description: RunManifest.csv file
+  - ch_segmentation:
+      type: channel
+      description: |
+        CellSegmentation/ directory channel (optional). Forwarded to
+        bases2fastq via `--segmentation`. Effective only on bases2fastq
+        2.4.0-internal or newer.
+  - ch_analysis_region:
+      type: channel
+      description: |
+        AnalysisRegion/ directory channel (optional). Forwarded to
+        bases2fastq via `--analysis-region`. Same compatibility story
+        as `ch_segmentation`.
+  - ch_panel:
+      type: channel
+      description: Panel JSON channel (optional)
+  - ch_tca_manifest:
+      type: channel
+      description: TargetCellAssignmentManifest CSV channel (optional)
+output:
+  - sample_fastq:
+      type: channel
+      description: Demultiplexed FASTQ files (Samples/**.fastq.gz)
+  - sample_fastq_gzi:
+      type: channel
+      description: BGZF block-index files (Samples/**.fastq.gz.gzi; present only when --bgzf-compression is active)
+  - fastq_dir:
+      type: channel
+      description: Path to bases2fastq output directory (derived from first FASTQ)
+  - run_stats:
+      type: channel
+      description: Run-level RunStats.json
+  - b2f_log:
+      type: channel
+      description: info/Bases2Fastq.log
+  - metrics_dir:
+      type: channel
+      description: Curated small-metadata directory for downstream --b2f-dir consumption
+  - versions:
+      type: channel
+      description: Software versions
+authors:
+  - "@brlajoie"
+maintainers:
+  - "@brlajoie"

@@ -1,0 +1,62 @@
+process PICARD_COLLECTRNASEQMETRICS {
+    tag "${meta.id}"
+    label 'process_single'
+
+    conda "${projectDir}/modules/nf-core/picard/collectrnaseqmetrics/environment.yml"
+    container "${workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container
+        ? 'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/08/0861295baa7c01fc593a9da94e82b44a729dcaf8da92be8e565da109aa549b25/data'
+        : 'community.wave.seqera.io/library/picard:3.4.0--e9963040df0a9bf6'}"
+
+    input:
+    tuple val(meta), path(bam)
+    path ref_flat
+    path fasta
+    path rrna_intervals
+
+    output:
+    tuple val(meta), path("*.rna_metrics"), emit: metrics
+    tuple val(meta), path("*.pdf"), emit: pdf, optional: true
+    path "versions.yml", emit: versions
+
+    when:
+    task.ext.when == null || task.ext.when
+
+    script:
+    def args = task.ext.args ?: ''
+    def prefix = task.ext.prefix ?: "${meta.id}"
+    def reference = fasta ? "--REFERENCE_SEQUENCE ${fasta}" : ""
+    def rrna = rrna_intervals ? "--RIBOSOMAL_INTERVALS ${rrna_intervals}" : ""
+    def avail_mem = 3072
+    if (!task.memory) {
+        log.info('[Picard CollectRnaSeqMetrics] Available memory not known - defaulting to 3GB. Specify process memory requirements to change this.')
+    } else {
+        avail_mem = (task.memory.mega * 0.8).intValue()
+    }
+    """
+    picard \\
+        -Xmx${avail_mem}M \\
+        CollectRnaSeqMetrics \\
+        ${args} \\
+        ${reference} \\
+        ${rrna} \\
+        --REF_FLAT ${ref_flat} \\
+        --INPUT ${bam} \\
+        --OUTPUT ${prefix}.rna_metrics
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        picard: \$(picard CollectRnaSeqMetrics --version 2>&1 | sed -nE 's/.*Version:[[:space:]]*([0-9][^[:space:]]*).*/\\1/p' | head -n1)
+    END_VERSIONS
+    """
+
+    stub:
+    def prefix = task.ext.prefix ?: "${meta.id}"
+    """
+    touch ${prefix}.rna_metrics
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        picard: stub
+    END_VERSIONS
+    """
+}

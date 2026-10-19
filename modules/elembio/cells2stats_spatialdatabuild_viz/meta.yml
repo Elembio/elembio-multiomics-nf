@@ -1,0 +1,69 @@
+name: cells2stats_spatialdatabuild_viz
+description: |
+  Generate the cells2stats visualization from a previously built SpatialData
+  archive (.zarr.zip) using the `cells2stats visualize` subcommand (rc8+
+  sectioned CLI; CytoCanvas v4 outputs require cells2stats 1.4.0-rc12+).
+  Sibling tool to CELLS2STATS — different invocation contract (takes an SDO
+  zip, not a run directory).
+keywords:
+  - spatial transcriptomics
+  - visualization
+  - cells2stats
+  - aviti
+  - element biosciences
+tools:
+  - cells2stats:
+      description: Cell statistics generation tool for Element AVITI24 System
+      homepage: https://docs.elembio.io/
+      licence: ["Proprietary"]
+
+input:
+  - meta:
+      type: map
+      description: "Groovy map containing run metadata (e.g., `[id: run_id]`)"
+  - sdo_zip:
+      type: file
+      description: |
+        SpatialData archive zip (.zarr.zip) produced by an upstream
+        build-spatialdata step.
+      pattern: "*.zarr.zip"
+
+output:
+  - cell_shapes:
+      type: file
+      description: Cell shape store for CytoCanvas (rc12+ zarr zip)
+      pattern: "cell-shapes-zarr.zip"
+  - nuclear_shapes:
+      type: file
+      description: Nuclear shape store for CytoCanvas (rc12+ zarr zip)
+      pattern: "nuclear-shapes-zarr.zip"
+  - points:
+      type: file
+      description: Points store for CytoCanvas (rc12+ zarr zip)
+      pattern: "points-zarr.zip"
+  - cyto_viz:
+      type: file
+      description: CytoCanvas session manifest (file_version 4.0.0)
+      pattern: "cyto.viz"
+  - sdo_index:
+      type: file
+      description: |
+        ZX02 indexes for points/shapes and the SDO images subtree
+        (`{run}.points-zarr-index.bin`, `{run}.cell-shapes-zarr-index.bin`,
+        `{run}.nuclear-shapes-zarr-index.bin`, `{run}.zarr-index.bin`).
+        Unique suffix globs — not `*zarr-index.bin` (that also matches the
+        points/shapes indexes).
+      pattern: "*.{zarr-index.bin,points-zarr-index.bin,cell-shapes-zarr-index.bin,nuclear-shapes-zarr-index.bin}"
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+  - run_log:
+      type: file
+      description: Full stdout/stderr log
+      pattern: "run_spatialdatabuild_viz.log"
+
+authors:
+  - "@brlajoie"
+maintainers:
+  - "@brlajoie"

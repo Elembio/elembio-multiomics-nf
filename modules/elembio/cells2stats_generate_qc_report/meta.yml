@@ -1,0 +1,54 @@
+name: cells2stats_generate_qc_report
+description: |
+  Generate the cells2stats Cell Painting QC HTML report from a previously
+  built SpatialData archive (.zarr.zip) using `cells2stats generate_qc_report`
+  (rc8+ sectioned CLI). External-facing CP report; keep distinct from any
+  internal run-quality-report process (different output names / publish dirs).
+keywords:
+  - spatial transcriptomics
+  - cell painting
+  - qc
+  - cells2stats
+  - aviti
+  - element biosciences
+tools:
+  - cells2stats:
+      description: Cell statistics generation tool for Element AVITI24 System
+      homepage: https://docs.elembio.io/
+      licence: ["Proprietary"]
+
+input:
+  - meta:
+      type: map
+      description: "Groovy map containing run metadata (e.g., `[id: run_id]`)"
+  - sdo_zip:
+      type: file
+      description: |
+        SpatialData archive zip (.zarr.zip) produced by an upstream
+        build-spatialdata step.
+      pattern: "*.zarr.zip"
+
+output:
+  - qc_report:
+      type: file
+      description: Cell Painting QC HTML report
+      pattern: "qc_report.html"
+  - qc_report_files:
+      type: file
+      description: |
+        QC report HTML plus any related sidecar files written alongside it
+        (exact set depends on cells2stats version / CellPaint content).
+      pattern: "qc_report*"
+  - versions:
+      type: file
+      description: File containing software versions
+      pattern: "versions.yml"
+  - run_log:
+      type: file
+      description: Full stdout/stderr log
+      pattern: "run_generate_qc_report.log"
+
+authors:
+  - "@brlajoie"
+maintainers:
+  - "@brlajoie"

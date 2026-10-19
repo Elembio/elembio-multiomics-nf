@@ -1,0 +1,860 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/Elembio/elembio-multiomics-nf/main/nextflow_schema.json",
+    "title": "Elembio/elembio-multiomics-nf pipeline parameters",
+    "description": "Element Biosciences AVITI24 multiomics secondary analysis: cytoprofiling, spatial FASTQ generation, 3-prime untargeted RNA counting, and SpatialData assembly",
+    "type": "object",
+    "$defs": {
+        "input_output_options": {
+            "title": "Input/output options",
+            "type": "object",
+            "fa_icon": "fas fa-terminal",
+            "description": "Define where the pipeline should find input data and save output data.",
+            "properties": {
+                "run_dir": {
+                    "type": "string",
+                    "description": "Path to Run"
+                },
+                "outdir": {
+                    "type": "string",
+                    "format": "directory-path",
+                    "description": "Path to output dir",
+                    "fa_icon": "fas fa-folder-open",
+                    "default": "./results"
+                },
+                "id": {
+                    "type": "string",
+                    "hidden": true,
+                    "description": "Optional run identifier. If not set: when run_dir matches .../runs/<instrument>/<run_id>/analysis/<analysis_id>/..., that run_id is used; otherwise the last path segment of run_dir."
+                }
+            }
+        },
+        "run_overrides": {
+            "title": "Run Overrides",
+            "type": "object",
+            "description": "Optional file overrides for run-level inputs (manifests, panels). Geometric filters (tile/batch/segmentation) live under Shared Filters. Prefer shared tca_manifest_csv so bases2fastq and cells2stats receive the same TCA; per-tool overrides are advanced escape hatches.",
+            "default": "",
+            "properties": {
+                "run_parameters_json": {
+                    "type": "string",
+                    "hidden": true
+                },
+                "run_manifest_csv": {
+                    "type": "string",
+                    "hidden": true,
+                    "description": "Override RunManifest.csv for bases2fastq (auto-detected from run_dir when unset)."
+                },
+                "tca_manifest_csv": {
+                    "type": "string",
+                    "description": "Shared Target Cell Assignment manifest CSV (SpecializedTargeted / OPS). Fans out to both bases2fastq and cells2stats unless a per-tool override is set. Production runs should use one identical TCA for both tools."
+                },
+                "c2s_tca_manifest_csv": {
+                    "type": "string",
+                    "hidden": true,
+                    "description": "Advanced: cells2stats-only TCA override. Prefer tca_manifest_csv so b2f and c2s stay identical."
+                },
+                "b2f_panel_json": {
+                    "type": "string"
+                },
+                "c2s_run_manifest": {
+                    "type": "string",
+                    "description": "Optional run manifest override for cells2stats (.csv or .json)."
+                },
+                "c2s_panel_json": {
+                    "type": "string"
+                },
+                "b2f_tca_manifest_csv": {
+                    "type": "string",
+                    "hidden": true,
+                    "description": "Advanced: bases2fastq-only TCA override (OPS / per-target FASTQ). Prefer tca_manifest_csv so b2f and c2s stay identical."
+                }
+            }
+        },
+        "shared_filters": {
+            "title": "Shared Filters",
+            "type": "object",
+            "description": "Geometric and sample filters applied identically across bases2fastq, cells2stats, and build_spatialdata. File overrides (manifests, panels) live under Run Overrides.",
+            "default": "",
+            "properties": {
+                "tile": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Tile regex pattern(s) -- drives b2f -i, c2s --tile, and build_spatialdata --tile-filter"
+                },
+                "filter_batch": {
+                    "type": "string"
+                },
+                "segmentation_dir": {
+                    "type": "string",
+                    "description": "Custom cell segmentation directory. Passed to cells2stats (and bases2fastq when supported)."
+                },
+                "analysis_region_dir": {
+                    "type": "string",
+                    "description": "Custom AnalysisRegion directory override. Applied to build-spatialdata only (cells2stats continues to read {run_dir}/AnalysisRegion). Used by the overlap-aware stitcher; ignored on non-overlap runs."
+                },
+                "ignore_samples": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "Unassigned",
+                        "PhiX",
+                        "phiX",
+                        "CBPhiX",
+                        "Undetermined"
+                    ],
+                    "description": "Sample names to exclude from processing"
+                }
+            }
+        },
+        "cells2stats": {
+            "title": "Cells2Stats",
+            "type": "object",
+            "description": "Parameters for the cells2stats (c2s) process.",
+            "default": "",
+            "properties": {
+                "c2s_args": {
+                    "type": "string",
+                    "hidden": true,
+                    "deprecated": true,
+                    "description": "DEPRECATED: catch-all string appended to cells2stats CLI. Prefer overriding `withName: CELLS2STATS { ext.args = { ... } }` in a `-c custom.config` overlay; see conf/modules.config for the canonical closure. Will be removed in a future release."
+                },
+                "c2s_error_on_missing": {
+                    "type": "boolean"
+                },
+                "c2s_max_unassigned": {
+                    "type": "integer",
+                    "description": "Limit unassigned sequences (1-10000)"
+                },
+                "c2s_no_error_on_invalid": {
+                    "type": "boolean"
+                },
+                "c2s_skip_cellprofiler": {
+                    "type": "boolean"
+                },
+                "c2s_skip_qc_report": {
+                    "type": "boolean",
+                    "description": "Skip the Cell Painting qc_report.html that cells2stats analyze generates (--skip-qc-report, rc9+). Default true; the published report is produced by CELLS2STATS_GENERATE_QC_REPORT from the pipeline-built SpatialData archive.",
+                    "default": true
+                },
+                "c2s_tar_program_logs": {
+                    "type": "boolean",
+                    "description": "Tar/gz the cells2stats Logs directory; when false, the directory is published as-is"
+                },
+                "c2s_publish_spatialdata": {
+                    "type": "boolean",
+                    "description": "Publish the c2s-internal SpatialData/ directory under cells2stats/SpatialData/. Off by default \u2014 the canonical SpatialData store is built by BUILD_SPATIALDATA at spatialdata/{run_id}.zarr."
+                },
+                "c2s_log_level": {
+                    "type": "string",
+                    "default": "info"
+                },
+                "enable_c2s_viz": {
+                    "type": "boolean",
+                    "description": "Run CELLS2STATS_SPATIALDATABUILD_VIZ (cells2stats visualize). Set false to skip.",
+                    "default": true
+                },
+                "enable_c2s_qc_report": {
+                    "type": "boolean",
+                    "description": "Run CELLS2STATS_GENERATE_QC_REPORT (cells2stats generate_qc_report; external Cell Painting qc_report.html under cells2stats/qc/). Distinct from avsd_qc_enabled (internal run-quality-report).",
+                    "default": true
+                },
+                "c2s_targeted_transcriptome_min_query_length": {
+                    "type": "integer",
+                    "description": "Minimum query-length gate (bases) for targeted transcriptome alignments (--targeted-transcriptome-min-query-length). Minimum 12. When unset, no extra gate beyond the adapter trimmer.",
+                    "minimum": 12
+                },
+                "c2s_targeted_transcriptome_mismatch_threshold": {
+                    "type": "integer",
+                    "description": "Override targeted transcriptome mismatch threshold for all targets (--targeted-transcriptome-mismatch-threshold). Valid 0-10; default is min(readLength/9, 10).",
+                    "minimum": 0,
+                    "maximum": 10
+                },
+                "c2s_targeted_transcriptome_min_insert_aligned": {
+                    "type": "integer",
+                    "description": "Minimum insert bases an alignment must cover for targeted transcriptome assignment (--targeted-transcriptome-min-insert-aligned). 0 disables; default 9.",
+                    "minimum": 0
+                },
+                "c2s_generate_targeted_transcriptome_bams": {
+                    "type": "boolean",
+                    "description": "Output concatenated BAM files from targeted transcriptome alignment (--generate-targeted-transcriptome-bams).",
+                    "default": false
+                },
+                "c2s_static_overlap_stitching": {
+                    "type": "boolean",
+                    "description": "Use default stitching for overlapping-tile runs (--static-overlap-stitching).",
+                    "default": false
+                },
+                "c2s_disable_per_batch_background": {
+                    "type": "boolean",
+                    "description": "Do not quantify/export per-batch background intensity features Bkg_RED/Bkg_GRN (--disable-per-batch-background).",
+                    "default": false
+                },
+                "c2s_process_imaging_targets": {
+                    "type": "boolean",
+                    "description": "Reprocess _Raw projection tiles into corrected Projection/ TIFFs before analysis (--process-imaging-targets).",
+                    "default": false
+                },
+                "c2s_enable_illumination_correction": {
+                    "type": "boolean",
+                    "description": "Force illumination correction on for every imaging target and enabled background during --process-imaging-targets (--enable-illumination-correction). Requires c2s_process_imaging_targets. Mutually exclusive with c2s_disable_illumination_correction. When both enable and disable are false, panel Analyses / RecipeValues decide per target.",
+                    "default": false
+                },
+                "c2s_disable_illumination_correction": {
+                    "type": "boolean",
+                    "description": "Force illumination correction off for every target during --process-imaging-targets (--disable-illumination-correction). Requires c2s_process_imaging_targets. Mutually exclusive with c2s_enable_illumination_correction. When both enable and disable are false, panel Analyses / RecipeValues decide per target.",
+                    "default": false
+                },
+                "c2s_target_mismatch_threshold": {
+                    "type": "integer",
+                    "description": "Override OPS mismatch threshold for all target sites (--target-mismatch-threshold). Valid 0-4.",
+                    "minimum": 0,
+                    "maximum": 4
+                },
+                "c2s_specialized_targeted_min_query_length": {
+                    "type": "integer",
+                    "description": "Minimum query-length gate for specialized targeted (OPS) alignments (--specialized-targeted-min-query-length). Minimum 12.",
+                    "minimum": 12
+                },
+                "c2s_generate_specialized_targeted_bams": {
+                    "type": "boolean",
+                    "description": "Output concatenated BAM files from specialized targeted (OPS) alignment (--generate-specialized-targeted-bams).",
+                    "default": false
+                },
+                "c2s_visualization_workers": {
+                    "type": "integer",
+                    "description": "Stage A scan / Stage B encode worker count for cells2stats visualize (--visualization-workers); defaults to task.cpus when unset. Requires cells2stats 1.4.0-rc12+.",
+                    "minimum": 1
+                },
+                "c2s_viz_shape_smoothing_workers": {
+                    "type": "integer",
+                    "description": "Shape smoothing worker count for cells2stats visualize; defaults to max(1, 2*task.cpus/3) when unset. Requires cells2stats 1.4.0-rc12+.",
+                    "minimum": 1
+                }
+            }
+        },
+        "bases2fastq": {
+            "title": "Bases2Fastq",
+            "type": "object",
+            "description": "Parameters for the bases2fastq (b2f) process.",
+            "default": "",
+            "properties": {
+                "b2f_args": {
+                    "type": "string",
+                    "hidden": true,
+                    "deprecated": true,
+                    "description": "DEPRECATED: catch-all string appended to bases2fastq CLI. Prefer overriding `withName: BASES2FASTQ { ext.args = { ... } }` in a `-c custom.config` overlay; see conf/modules.config for the canonical closure. Will be removed in a future release."
+                },
+                "b2f_demux_only": {
+                    "type": "boolean"
+                },
+                "b2f_detect_adapters": {
+                    "type": "boolean"
+                },
+                "b2f_error_on_missing": {
+                    "type": "boolean"
+                },
+                "b2f_exclude_tile": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Tile exclusion patterns (list). Auto-populated when include tiles are active."
+                },
+                "b2f_filter_mask": {
+                    "type": "string",
+                    "description": "Filter mask value for --filter-mask"
+                },
+                "b2f_flowcell_id": {
+                    "type": "string",
+                    "description": "Flowcell ID override for --flowcell-id"
+                },
+                "b2f_include_tile": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Tile inclusion patterns (list). Falls back to shared tile param if empty."
+                },
+                "b2f_legacy_fastq": {
+                    "type": "boolean"
+                },
+                "b2f_log_level": {
+                    "type": "string",
+                    "default": "INFO"
+                },
+                "b2f_no_error_on_invalid": {
+                    "type": "boolean"
+                },
+                "b2f_no_projects": {
+                    "type": "boolean",
+                    "default": true
+                },
+                "b2f_num_unassigned": {
+                    "type": "integer",
+                    "default": 30
+                },
+                "b2f_qc_only": {
+                    "type": "boolean"
+                },
+                "b2f_settings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Repeated --settings 'key,val' entries"
+                },
+                "b2f_skip_multi_qc": {
+                    "type": "boolean"
+                },
+                "b2f_skip_qc_report": {
+                    "type": "boolean"
+                },
+                "b2f_split_lanes": {
+                    "type": "boolean"
+                },
+                "b2f_group_fastq": {
+                    "type": "boolean"
+                },
+                "b2f_force_index_orientation": {
+                    "type": "boolean"
+                },
+                "b2f_force_detect_index_orientation": {
+                    "type": "boolean",
+                    "description": "Pass --force-detect-index-orientation to bases2fastq (b2f >= 2.4.0-internal)."
+                },
+                "b2f_skip_empty_fq_files": {
+                    "type": "boolean",
+                    "description": "Pass --skip-empty-fq-files to bases2fastq (b2f >= 2.4.0-internal)."
+                },
+                "b2f_cyto_fastq_mask": {
+                    "type": "string"
+                },
+                "b2f_per_target_fastq": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "reference_genome": {
+            "title": "Reference Genome",
+            "type": "object",
+            "description": "Reference genome and annotation files.",
+            "default": "",
+            "properties": {
+                "genome": {
+                    "type": "string",
+                    "default": "GRCh38",
+                    "description": "Reference genome key. Selects the FASTA, STAR index and GENCODE GTF from igenomes_base. GRCh38 is the production genome; GRCh38_chr20 is a chromosome-20 smoke slice loaded only by the test profile."
+                },
+                "genes_gtf": {
+                    "type": "string",
+                    "description": "GENCODE gene annotation GTF on the same assembly as the genome (release 47 validated; 31 or later expected to run). Defaults to the genome's GTF; required with --igenomes_ignore."
+                },
+                "genes_bed12": {
+                    "type": "string"
+                },
+                "chrom_sizes": {
+                    "type": "string"
+                },
+                "fasta": {
+                    "type": "string",
+                    "hidden": true,
+                    "description": "Custom references only (requires --igenomes_ignore): reference genome FASTA."
+                },
+                "fasta_fai": {
+                    "type": "string",
+                    "hidden": true
+                },
+                "genome_file": {
+                    "type": "string",
+                    "hidden": true
+                },
+                "genome_dict": {
+                    "type": "string",
+                    "hidden": true
+                },
+                "igenomes_base": {
+                    "type": "string",
+                    "default": "s3://elembio-static-public-244107694630-us-west-2/igenomes",
+                    "hidden": true,
+                    "description": "Base path of the reference layout. Defaults to the Element reference bucket (STAR 2.7 indexes and GENCODE GTF); point it at a mirror of that layout to avoid remote reads."
+                },
+                "igenomes_ignore": {
+                    "type": "boolean",
+                    "hidden": true,
+                    "description": "Ignore the genome map and supply --fasta, --star_index and --genes_gtf together."
+                }
+            }
+        },
+        "star": {
+            "title": "STAR",
+            "type": "object",
+            "description": "STAR aligner parameters.",
+            "default": "",
+            "properties": {
+                "star_index": {
+                    "type": "string",
+                    "hidden": true,
+                    "description": "Custom references only (requires --igenomes_ignore): STAR index built with STAR 2.7.4a or later."
+                },
+                "star_bed": {
+                    "type": "string"
+                },
+                "star_ignore_sjdbgtf": {
+                    "type": "boolean",
+                    "default": true
+                },
+                "star_twopassmode": {
+                    "type": "string",
+                    "default": "Basic"
+                },
+                "star_align_ends_type": {
+                    "type": "string",
+                    "default": "Local"
+                },
+                "star_mode": {
+                    "type": "string",
+                    "default": "star_default",
+                    "enum": [
+                        "star_default",
+                        "relaxed",
+                        "diss_strict",
+                        "diss_balanced",
+                        "diss_sensitive",
+                        "diss_permissive"
+                    ],
+                    "description": "Named STAR stringency for 3' STAR_ALIGN (RNA2counts star_mode). star_default is STAR native (MatchNmin 0, score/match 0.66/0.66, multimapping 5). relaxed is the pre-1.10.0 DiSS set (15 / 0.2 / 0.1, multimapping 10). Also -profile star_default / star_relaxed / …"
+                },
+                "star_outFilterMultimapNmax": {
+                    "type": "integer",
+                    "description": "Optional override for the selected star_mode outFilterMultimapNmax."
+                },
+                "star_outSAMmultNmax": {
+                    "type": "integer",
+                    "description": "Optional override for the selected star_mode outSAMmultNmax."
+                },
+                "star_outFilterMatchNmin": {
+                    "type": "integer",
+                    "description": "Optional override for the selected star_mode outFilterMatchNmin."
+                },
+                "star_outFilterScoreMinOverLread": {
+                    "type": "number",
+                    "description": "Optional override for the selected star_mode outFilterScoreMinOverLread."
+                },
+                "star_outFilterMatchNminOverLread": {
+                    "type": "number",
+                    "description": "Optional override for the selected star_mode outFilterMatchNminOverLread."
+                },
+                "star_alignSJoverhangMin": {
+                    "type": "integer",
+                    "description": "Optional override for the selected star_mode alignSJoverhangMin."
+                },
+                "star_chimSegmentMin": {
+                    "type": "integer",
+                    "description": "Optional override for the selected star_mode chimSegmentMin."
+                }
+            }
+        },
+        "fastq2parquet": {
+            "title": "Fastq2Parquet (shared)",
+            "type": "object",
+            "description": "Shared parameters for all FASTQ2PARQUET subworkflows including assay type routing and QC.",
+            "default": "",
+            "properties": {
+                "f2p_three_prime_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "ThreePrimeUntargeted",
+                        "Transcript"
+                    ]
+                },
+                "f2p_specialized_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "SpecializedTargeted"
+                    ]
+                },
+                "f2p_targeted_tx_types": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "TargetedTranscriptomeProfiling"
+                    ]
+                },
+                "f2p_qc_sample_size": {
+                    "type": "integer",
+                    "default": 250000
+                },
+                "f2p_qc_cell_sample_size": {
+                    "type": "integer",
+                    "default": 500
+                },
+                "f2p_batch_size": {
+                    "type": "integer",
+                    "default": 100000
+                }
+            }
+        },
+        "fastq2parquet_3prime": {
+            "title": "Fastq2Parquet 3Prime",
+            "type": "object",
+            "description": "Parameters specific to the FASTQ2PARQUET_3PRIME subworkflow (three-prime untargeted).",
+            "default": "",
+            "properties": {
+                "f2p_3p_count_multimapping_reads": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Include multimapping reads in featureCounts."
+                },
+                "f2p_3p_count_overlapping_reads": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Count reads overlapping multiple features."
+                },
+                "f2p_3p_slop_5p_bp": {
+                    "type": "integer",
+                    "default": 200,
+                    "description": "gen-feature-bed: bp a feature is extended in the 5' direction into the CDS."
+                },
+                "f2p_3p_slop_3p_bp": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "gen-feature-bed: bp a feature is extended downstream past the gene's 3' terminus (the 3'UTR end for UTR-having genes, the terminal-exon end for UTR-less genes)."
+                },
+                "f2p_3p_features": {
+                    "type": "string",
+                    "default": "utr,exon,chrm",
+                    "description": "Feature tier groups emitted into the SAF (comma-separated) \u2014 the single source of truth for tier selection. Exon-union model: 3'UTR tiers + exon (catches UTR-less genes; synthetic dropped) + chrM umbrella. To count introns, add the tier: 'utr,exon,intron,chrm'."
+                },
+                "f2p_3p_unique_only_tiers": {
+                    "type": "string",
+                    "default": "intron",
+                    "description": "Feature tiers counted unique-only \u2014 their simple multimappers are dropped \u2014 via diss-tools --unique-only-categories. Comma-separated; inert unless the tier is included."
+                },
+                "f2p_3p_include_gene_types": {
+                    "type": "string",
+                    "default": "protein_coding,lncRNA",
+                    "description": "Gene biotypes retained when building the SAF (comma-separated; requires the full GTF)."
+                },
+                "f2p_3p_exclude_gene_types": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Gene biotypes excluded when building the SAF (comma-separated; empty = none)."
+                },
+                "f2p_3p_count_simple_multimapping_reads": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Count reads multimapping within a single gene."
+                },
+                "f2p_3p_rescue_gene_family": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enable HGNC gene-family rescue in the rank collapse (needs f2p_3p_hgnc_gene_groups)."
+                },
+                "f2p_3p_hgnc_gene_groups": {
+                    "type": "string",
+                    "description": "Path to the HGNC gene-groups TSV used for family rescue."
+                },
+                "f2p_3p_strandedness": {
+                    "type": "string",
+                    "default": "reverse",
+                    "description": "Library strandedness for assignment (matches featureCounts -s 2)."
+                },
+                "f2p_3p_resolver_metrics": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Emit the assignment-engine all-records aggregate metrics TSV."
+                },
+                "f2p_3p_read_filter_enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Run + enforce the soft-clip read filter (removes softclip-failing reads from the count matrix). Default off = the step is skipped and the matrix is unchanged. Soft-clip only \u2014 base-quality PF is upstream in bases2fastq."
+                },
+                "f2p_3p_read_filter_softclip_max": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "Max read_min_softclip (%) allowed to pass the soft-clip rule."
+                },
+                "enable_identify_filtered_polonies": {
+                    "type": "boolean",
+                    "description": "Run IDENTIFY_FILTERED_POLONIES + MERGE_POLONY_PARQUETS. When false, SPLIT still runs on the aligned-only parquet; BUILD never reads the combined well×batch file.",
+                    "default": true
+                }
+            }
+        },
+        "build_spatialdata": {
+            "title": "Build SpatialData",
+            "type": "object",
+            "description": "Parameters for the build_spatialdata (avsd) process.",
+            "default": "",
+            "properties": {
+                "avsd_zip_spatialdata": {
+                    "type": "boolean",
+                    "description": "Zip the spatialdata *.zarr directory; when false, only the .zarr directory is produced",
+                    "default": true
+                },
+                "avsd_merge_strategy_protein": {
+                    "type": "string",
+                    "default": "expand_features"
+                },
+                "avsd_merge_strategy_transcript": {
+                    "type": "string",
+                    "default": "expand_features"
+                },
+                "avsd_merge_strategy_ops": {
+                    "type": "string",
+                    "default": "independent_features"
+                },
+                "avsd_merge_strategy_three_prime_untargeted": {
+                    "type": "string",
+                    "default": "aggregate_features"
+                },
+                "avsd_dask_write_threads": {
+                    "type": "integer",
+                    "default": 2,
+                    "minimum": 1,
+                    "description": "Concurrent dask tasks during element writes (build-spatialdata --dask-write-threads). 1 = synchronous (lowest memory), 2 = single-chunk read-ahead (recommended for single-well runs), N = up to N chunks in flight; diminishing returns above 3-4. Total concurrent threads ~= workers * dask_write_threads."
+                },
+                "avsd_per_worker_lib_threads": {
+                    "type": "integer",
+                    "default": 2,
+                    "minimum": 1,
+                    "description": "OMP/OpenBLAS/MKL/NumExpr threads per BUILD_SPATIALDATA worker process. Same role as onboard kAggregationPythonPerWorkerLibThreads: keep Phase 1 OS threads ~= workers * this value instead of workers * host cpu_count. POLARS_MAX_THREADS is set to task.cpus (worker count), not this value."
+                },
+                "avsd_debug_preserve_inputs": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "On BUILD_SPATIALDATA failure, tar+gzip-compress the staged input tree (polonies/, genes/, c2s_dir/, c2s_metrics/, b2f_dir/, f2p_3p_dir/, run_id/) into debug_inputs.tar.gz in the task work dir. Off by default; enable when triaging a reproducible failure to recover all inputs without rebuilding upstream."
+                },
+                "avsd_fail_on_missing_batches": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Pass --fail-on-missing-batches to build-spatialdata. When true, raise if a Panel-declared count batch (ThreePrime / OPS / barcoding / targeted transcriptome) has no points parquets at all. Present-but-unaligned batches (parquets exist, no target_name) are unaffected. Default false: warn, record under global-table-metadata.uns['missing_batches'], and continue."
+                }
+            }
+        },
+        "spatialdata_qc": {
+            "title": "SpatialData QC Report",
+            "type": "object",
+            "description": "Parameters for the SPATIALDATA_QC_REPORT process (elembio-spatialdata-analysis run-quality-report CLI).",
+            "default": "",
+            "properties": {
+                "avsd_qc_enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Master on/off for SPATIALDATA_QC_REPORT (run-quality report). Default false; requires spatialdata_analysis_container_url/_tag. Distinct from enable_c2s_qc_report (cells2stats generate_qc_report)."
+                },
+                "avsd_qc_run_analysis": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Adds the Analysis tab (cell_state + sample_correlation + rarefaction + gene_distribution). CPU-only."
+                },
+                "avsd_qc_run_embedding": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Runs the per-modality HVG + PCA + UMAP embedding section. Multi-minute on CPU; reserved for a future GPU profile."
+                },
+                "avsd_qc_advanced_metrics": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Show ADV-tagged power-user sections (per-tile flowcell maps, base composition, rarefaction, feature distribution, cell-cycle, etc.)."
+                },
+                "avsd_qc_show_filter_tabs": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Render Filtered sub-tabs alongside the Raw sub-tabs for each modality."
+                },
+                "avsd_qc_analysis_subsample": {
+                    "type": "number",
+                    "description": "Override --analysis-subsample-frac (default 0.5). null = use CLI default."
+                },
+                "avsd_qc_embedding_subsample": {
+                    "type": "number",
+                    "description": "Override --embedding-subsample-frac (default 0.3). null = use CLI default."
+                },
+                "avsd_qc_cellpaint_subsample": {
+                    "type": "number",
+                    "description": "Override --cellpaint-subsample-frac (default 0.2). null = use CLI default."
+                },
+                "avsd_qc_metadata_table": {
+                    "type": "string",
+                    "description": "Override --metadata-table (default 'global-table-metadata')."
+                },
+                "avsd_qc_report_title": {
+                    "type": "string",
+                    "description": "Override --report-title (default 'Run Overview Report')."
+                },
+                "avsd_qc_args": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Free-form extra args appended to the run-quality-report invocation."
+                }
+            }
+        },
+        "docker_containers": {
+            "title": "Docker Containers",
+            "type": "object",
+            "description": "Docker container image URLs and version tags for pipeline modules.",
+            "default": "",
+            "properties": {
+                "elembiodisstools_container_url": {
+                    "type": "string",
+                    "default": "904220683607.dkr.ecr.us-west-2.amazonaws.com/elembio-diss-tools-release",
+                    "description": "elembio-diss-tools image repository."
+                },
+                "elembiodisstools_container_tag": {
+                    "type": "string",
+                    "default": "1.0.0",
+                    "description": "elembio-diss-tools image tag."
+                },
+                "c2s_container_url": {
+                    "type": "string",
+                    "default": "904220683607.dkr.ecr.us-west-2.amazonaws.com/cells2stats-release",
+                    "description": "cells2stats image repository."
+                },
+                "c2s_container_tag": {
+                    "type": "string",
+                    "default": "2.0.0",
+                    "description": "cells2stats image tag."
+                },
+                "b2f_container_url": {
+                    "type": "string",
+                    "default": "904220683607.dkr.ecr.us-west-2.amazonaws.com/bases2fastq-release",
+                    "description": "bases2fastq image repository."
+                },
+                "b2f_container_tag": {
+                    "type": "string",
+                    "default": "3.0.0",
+                    "description": "bases2fastq image tag."
+                },
+                "spatialdata_build_container_url": {
+                    "type": "string",
+                    "default": "904220683607.dkr.ecr.us-west-2.amazonaws.com/elembio-spatialdata-build-release",
+                    "description": "elembio-spatialdata-build image repository."
+                },
+                "spatialdata_build_container_tag": {
+                    "type": "string",
+                    "default": "1.0.0",
+                    "description": "elembio-spatialdata-build image tag."
+                },
+                "spatialdata_analysis_container_url": {
+                    "type": "string",
+                    "default": ""
+                },
+                "spatialdata_analysis_container_tag": {
+                    "type": "string",
+                    "default": ""
+                }
+            },
+            "required": [
+                "c2s_container_url", "c2s_container_tag",
+                "b2f_container_url", "b2f_container_tag",
+                "elembiodisstools_container_url", "elembiodisstools_container_tag",
+                "spatialdata_build_container_url", "spatialdata_build_container_tag"
+            ]
+        },
+        "infrastructure": {
+            "title": "Infrastructure",
+            "type": "object",
+            "description": "Resource limits and pipeline infrastructure settings.",
+            "default": "",
+            "properties": {
+                "max_cpus": {
+                    "type": "integer",
+                    "default": 48,
+                    "hidden": true
+                },
+                "max_memory": {
+                    "type": "string",
+                    "default": "180.GB",
+                    "hidden": true
+                },
+                "max_time": {
+                    "type": "string",
+                    "default": "48.h",
+                    "hidden": true
+                },
+                "publish_dir_mode": {
+                    "type": "string",
+                    "default": "copy",
+                    "hidden": true
+                },
+                "tracedir": {
+                    "type": "string",
+                    "default": "./results/pipeline_info",
+                    "hidden": true
+                },
+                "enable_conda": {
+                    "type": "boolean",
+                    "hidden": true
+                },
+                "custom_config_version": {
+                    "type": "string",
+                    "default": "main",
+                    "hidden": true
+                },
+                "custom_config_base": {
+                    "type": "string",
+                    "default": "https://raw.githubusercontent.com/Elembio/configs/main",
+                    "hidden": true
+                },
+                "config_profile_name": {
+                    "type": "string",
+                    "hidden": true
+                }
+            }
+        }
+    },
+    "allOf": [
+        {
+            "$ref": "#/$defs/input_output_options"
+        },
+        {
+            "$ref": "#/$defs/run_overrides"
+        },
+        {
+            "$ref": "#/$defs/shared_filters"
+        },
+        {
+            "$ref": "#/$defs/cells2stats"
+        },
+        {
+            "$ref": "#/$defs/bases2fastq"
+        },
+        {
+            "$ref": "#/$defs/reference_genome"
+        },
+        {
+            "$ref": "#/$defs/star"
+        },
+        {
+            "$ref": "#/$defs/fastq2parquet"
+        },
+        {
+            "$ref": "#/$defs/fastq2parquet_3prime"
+        },
+        {
+            "$ref": "#/$defs/build_spatialdata"
+        },
+        {
+            "$ref": "#/$defs/spatialdata_qc"
+        },
+        {
+            "$ref": "#/$defs/docker_containers"
+        },
+        {
+            "$ref": "#/$defs/infrastructure"
+        }
+    ]
+}
