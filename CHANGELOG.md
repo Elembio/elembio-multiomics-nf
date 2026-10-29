@@ -4,6 +4,14 @@ All notable changes to the public `elembio-multiomics-nf` releases are documente
 in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.1]
+
+### Fixed
+- Single-well / high-polony runs: `PROCESS_READ_ASSIGNMENTS` escalates memory and
+  walltime on retry; first-attempt walltimes raised for `CELLS2STATS`,
+  `BUILD_SPATIALDATA`, and `TAG_BAM` so large canvases no longer fail at the
+  previous fixed limits.
+
 ## [2.0.0]
 
 First stable release. No workflow changes since `2.0.0-rc7`.
